@@ -1,0 +1,16 @@
+# General
+.DS_Store
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+venv/
+.venv/
+env/
+venv.*/
+
