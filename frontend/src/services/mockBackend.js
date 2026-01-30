@@ -83,6 +83,34 @@ function seedFakeData() {
       },
       feedback: 'Noticeable improvement in drop shots and net control. Keep practicing timing.',
     },
+     {
+      matchId: 'match-4',
+      dateTime: '2026-01-25', 
+      playerId: demoUser.userId,
+      type: 'Drill',
+      scores: {
+        smash: 90,
+        clear: 75,
+        dropShot: 60,
+        netPlay: 78,
+        footwork: 75,
+      },
+      feedback: 'Noticeable improvement in drop shots and net control. Keep practicing timing.',
+    },
+      {
+      matchId: 'match-5',
+      dateTime: '2026-01-28', 
+      playerId: demoUser.userId,
+      type: 'Drill',
+      scores: {
+        smash: 90,
+        clear: 70,
+        dropShot: 60,
+        netPlay: 70,
+        footwork: 80,
+      },
+      feedback: 'Noticeable improvement in drop shots and net control. Keep practicing timing.',
+    },
   ];
 
   const users = [demoUser];

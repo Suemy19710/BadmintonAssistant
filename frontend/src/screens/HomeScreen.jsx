@@ -9,6 +9,7 @@ const HomeScreen = ({
   onToggleTheme,
   currentUser,
   onStart,
+  onViewProgress,
   onLogout,
 }) => {
   return (
@@ -49,7 +50,7 @@ const HomeScreen = ({
             Start Training Session
           </PrimaryButton>
           <div className="grid grid-cols-2 gap-4">
-            <PrimaryButton variant="secondary" onClick={() => {}} currentTheme={currentTheme}>
+            <PrimaryButton variant="secondary" onClick={onViewProgress} currentTheme={currentTheme}>
               View Progress
             </PrimaryButton>
             <PrimaryButton variant="secondary" onClick={onLogout} currentTheme={currentTheme}>

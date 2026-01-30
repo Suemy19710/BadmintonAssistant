@@ -21,6 +21,7 @@ import TrimmingScreen from './screens/TrimmingScreen';
 import FocusSelectionScreen from './screens/FocusSelectionScreen';
 import AnalyzingScreen from './screens/AnalyzingScreen';
 import SummaryScreen from './screens/SummaryScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
 const App=() => {
   // global overall state
@@ -85,6 +86,12 @@ const App=() => {
     setCurrentUser(null);
     setStep(AppStep.AUTH);
   };
+  const saveProfile = () => {
+    if (!currentUser) return;
+    mockDb.saveProfile(currentUser.userId, profile);
+    setStep(AppStep.HOME);
+  };
+
 
   const startRecording = () => {
     setIsRecording(true);
@@ -171,9 +178,25 @@ const App=() => {
           currentUser={currentUser}
           onStart={() => setStep(AppStep.SELECT_TYPE)}
           onLogout={handleLogout}
+          onViewProgress={() => setStep(AppStep.PROFILE)}
         />
       );
     
+    case AppStep.PROFILE:
+      return (
+        <ProfileScreen
+          currentTheme={currentTheme}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          currentUser={currentUser}
+          profile={profile}
+          setProfile={setProfile}
+          onBack={() => setStep(AppStep.HOME)}
+          onSave={saveProfile}
+          onLogout={handleLogout}
+        />
+      );
+
     case AppStep.SELECT_TYPE:
       return (
         <SelectTypeScreen

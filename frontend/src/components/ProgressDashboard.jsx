@@ -25,13 +25,13 @@ const ProgressDashboard = ({theme}) => {
     }, [user]);
 
     const chartData = useMemo(() => {
-        return matches.map(m => ({
-            name: new Date(m.dateTime).toLocaleDateString(undefined, {weekday:'short'}), 
-            smash: m.scores.smash,
-            footwork: m.scores.footwork,
-            net: m.scores.netPlay
-        }));
-    }, [matches]);
+    return matches.map(m => ({
+      name: new Date(m.dateTime).toLocaleDateString(undefined, { weekday: 'short' }),
+      smash: m.scores.smash,
+      footwork: m.scores.footwork,
+      net: m.scores.netPlay
+    }));
+  }, [matches]);
 
     const skillDistribution = useMemo(() => {
          if (matches.length === 0) return [];
@@ -66,8 +66,10 @@ const ProgressDashboard = ({theme}) => {
                 vertical={false}
                 stroke={theme === 'dark-green' ? '#1e293b' : '#f1f5f9'}
               />
-              <XAxis
+             <XAxis
                 dataKey="name"
+                interval={0}         
+                minTickGap={0}
                 stroke={theme === 'dark-green' ? '#64748b' : '#94a3b8'}
                 fontSize={12}
                 tickLine={false}
@@ -133,3 +135,10 @@ const ProgressDashboard = ({theme}) => {
 };
 
 export default ProgressDashboard;
+
+
+
+
+
+
+
