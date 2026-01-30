@@ -7,17 +7,17 @@ export const THEMES = {
     text: 'text-emerald-400',
     subtext: 'text-slate-400',
     primary: 'bg-emerald-500',
-    primaryText: 'text-white',
+    primaryText: 'text-emerald-400',
     accent: 'border-emerald-500/30',
     icon: 'text-emerald-500'
   },
   'white-indigo': {
     bg: 'bg-slate-50',
     card: 'bg-white',
-    text: 'text-indigo-900',
+    text: 'text-indigo-600',
     subtext: 'text-slate-500',
     primary: 'bg-indigo-600',
-    primaryText: 'text-white',
+    primaryText: 'text-indigo-600',
     accent: 'border-indigo-100',
     icon: 'text-indigo-600'
   }
