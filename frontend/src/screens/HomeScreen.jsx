@@ -14,7 +14,7 @@ const HomeScreen = ({
 }) => {
   return (
     <StepContainer
-      title="AI Badminton Coach"
+      title="Badminton Coach"
       showBack={false}
       currentTheme={currentTheme}
       theme={theme}
