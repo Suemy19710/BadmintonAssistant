@@ -12,6 +12,7 @@ const RecordingScreen = ({
   timer,
   onStart,
   onStop,
+  cameraRef
 }) => {
   return (
     <StepContainer
@@ -22,7 +23,7 @@ const RecordingScreen = ({
       onBack={onBack}
     >
       <div className="flex-1 relative flex flex-col">
-        <CameraPreview className="flex-1" />
+        <CameraPreview ref={cameraRef} className="flex-1" />
 
         <div className="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">
           <div className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-2">

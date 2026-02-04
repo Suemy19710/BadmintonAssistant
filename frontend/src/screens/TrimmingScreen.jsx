@@ -10,6 +10,8 @@ const TrimmingScreen = ({
   trimRange,
   setTrimRange,
   onNext,
+  recordedUrl, 
+  recordedDuration
 }) => {
   return (
     <StepContainer
@@ -21,16 +23,23 @@ const TrimmingScreen = ({
     >
       <div className="space-y-8 flex-1">
         <div className="aspect-[16/9] bg-slate-800 rounded-xl relative overflow-hidden">
-          <img
-            src="https://images.unsplash.com/photo-1599474924187-334a494220f1?auto=format&fit=crop&q=80&w=800"
-            className="w-full h-full object-cover opacity-60"
-            alt="Frame"
-          />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <svg className="w-16 h-16 text-white/80" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </div>
+          {recordedUrl ? (
+            <video
+              src={recordedUrl}
+              className="w-full h-full object-cover"
+              controls
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-white/60">
+              No recording found
+            </div>
+          )}
+        </div>
+
+        {/* show trim in seconds */}
+        <div className={`text-xs ${currentTheme.text} opacity-70 flex justify-between`}>
+          <span>Start: {((trimRange.start / 100) * recordedDuration).toFixed(1)}s</span>
+          <span>End: {((trimRange.end / 100) * recordedDuration).toFixed(1)}s</span>
         </div>
 
         <div className="space-y-4">
