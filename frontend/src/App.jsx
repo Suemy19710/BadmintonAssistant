@@ -50,6 +50,15 @@ const App=() => {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const [recordedBlob, setRecordedBlob] = useState(null);
+  const [recordedUrl, setRecordedUrl] = useState("");
+  const [recordedDuration, setRecordedDuration] = useState(0);
+
+  const recorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const recordingCameraRef = useRef(null); 
+
+
   const timerRef = useRef(null);
   const currentTheme = THEMES[theme];
   // load exisiting profile if user is logged in 
@@ -92,22 +101,66 @@ const App=() => {
     setStep(AppStep.HOME);
   };
 
+  const getVideoDuration = (url) =>
+  new Promise(resolve => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.src = url;
+    v.onloadedmetadata = () => resolve(v.duration || 0);
+  });
 
-  const startRecording = () => {
+  const startRecording = async () => {
+    const stream = recordingCameraRef.current?.getStream?.();
+    if (!stream) {
+      alert("Camera stream not ready yet.");
+      return;
+    }
+
+    chunksRef.current = [];
+
+    const recorder = new MediaRecorder(stream, {
+      mimeType: "video/webm;codecs=vp8,opus",
+    });
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+    };
+
+    recorder.onstop = async () => {
+      const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
+      setRecordedBlob(blob);
+
+      // cleanup old URL if exists
+      if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+
+      const url = URL.createObjectURL(blob);
+      setRecordedUrl(url);
+
+      const duration = await getVideoDuration(url);
+      setRecordedDuration(duration);
+
+      setStep(AppStep.TRIMMING);
+    };
+
+    recorderRef.current = recorder;
+
+    // timer UI
     setIsRecording(true);
     setTimer(0);
-    timerRef.current = window.setInterval(() => {
-      setTimer(prev => prev+1);
-    }, 1000);
+    timerRef.current = window.setInterval(() => setTimer(prev => prev + 1), 1000);
+
+    recorder.start(500); // chunk every 500ms
   };
 
   const stopRecording = () => {
     setIsRecording(false);
+
     if (timerRef.current) {
       window.clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    setStep(AppStep.TRIMMING);
+
+    recorderRef.current?.stop(); // ✅ triggers onstop -> goes to TRIMMING
   };
 
   const runAnalysis = async () => {
@@ -269,6 +322,7 @@ const App=() => {
           timer={timer}
           onStart={startRecording}
           onStop={stopRecording}
+          cameraRef={recordingCameraRef}  
         />
       );
 
@@ -282,6 +336,8 @@ const App=() => {
           trimRange={trimRange}
           setTrimRange={setTrimRange}
           onNext={() => setStep(AppStep.FOCUS_SELECTION)}
+          recordedUrl={recordedUrl}         
+          recordedDuration={recordedDuration} 
         />
       );
 
