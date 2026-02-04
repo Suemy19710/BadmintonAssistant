@@ -6,101 +6,192 @@ from torchvision import models, transforms
 
 # --- 1. Settings ---
 INPUT_VIDEO = "/Users/nguyenanhvu/Documents/BadmintonAssistant/FirstTestData/InputVideo.mov"
-OUTPUT_VIDEO = "/Users/nguyenanhvu/Documents/BadmintonAssistant/training/court_detection.mp4"
-MODEL_PATH = "best_model.pth"
+OUTPUT_VIDEO = "/Users/nguyenanhvu/Documents/BadmintonAssistant/training/court_output_refined.mp4"
+MODEL_PATH = "best_heatmap_model.pth"
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-IMG_SIZE = 224 # Keep consistent with training.py
 
-# --- 2. Define Model Structure ---
-class CourtKeypointModel(nn.Module):
+# Dimensions used during training
+INPUT_SIZE = 224
+HEATMAP_SIZE = 56 
+NUM_KEYPOINTS = 22
+
+# --- 2. Model (Same as before) ---
+class CourtHeatmapModel(nn.Module):
     def __init__(self, num_keypoints):
-        super(CourtKeypointModel, self).__init__()
-        self.backbone = models.resnet50(weights=None)
-        self.backbone.fc = nn.Linear(self.backbone.fc.in_features, num_keypoints)
+        super(CourtHeatmapModel, self).__init__()
+        resnet = models.resnet50(weights=None)
+        self.encoder = nn.Sequential(*list(resnet.children())[:-2])
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(2048, 256, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(256), nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(128), nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(64), nn.ReLU(inplace=True),
+            nn.Conv2d(64, num_keypoints, kernel_size=1) 
+        )
         
     def forward(self, x):
-        return self.backbone(x)
+        return self.decoder(self.encoder(x))
 
-# --- 3. Load Model ---
-model = CourtKeypointModel(num_keypoints=44) 
-model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
-model.to(DEVICE)
-model.eval()
-
-# Image transformation - REMOVED Resize because we handle it manually via Letterboxing
-transform = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-])
-
-# --- 4. Initialize Video Handling ---
-cap = cv2.VideoCapture(INPUT_VIDEO)
-if not cap.isOpened():
-    print(f"Error: Could not open video {INPUT_VIDEO}")
-    exit()
-
-width_orig  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-height_orig = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-fps         = cap.get(cv2.CAP_PROP_FPS)
-total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
-out = cv2.VideoWriter(OUTPUT_VIDEO, fourcc, fps, (width_orig, height_orig))
-
-print(f"Processing {total_frames} frames using Letterboxing logic...")
-
-# --- 5. Processing Loop ---
-frame_count = 0
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret: break
-
-    # --- STEP A: LETTERBOXING (Preprocessing) ---
-    # 1. Calculate scale and new dimensions
-    scale = IMG_SIZE / max(height_orig, width_orig)
-    new_w, new_h = int(width_orig * scale), int(height_orig * scale)
+# --- 3. Better Decoder: SOFT-ARGMAX ---
+# This calculates sub-pixel accuracy instead of integer pixels
+def get_soft_argmax(batch_heatmaps):
+    batch_size, num_joints, h, w = batch_heatmaps.shape
     
-    # 2. Resize and convert to RGB
-    img_resized = cv2.resize(frame, (new_w, new_h))
-    img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
-
-    # 3. Create black canvas and center the image
-    canvas = np.zeros((IMG_SIZE, IMG_SIZE, 3), dtype=np.uint8)
-    offset_x = (IMG_SIZE - new_w) // 2
-    offset_y = (IMG_SIZE - new_h) // 2
-    canvas[offset_y:offset_y+new_h, offset_x:offset_x+new_w] = img_rgb
-
-    # --- STEP B: PREDICTION ---
-    img_tensor = transform(canvas).unsqueeze(0).to(DEVICE)
-    with torch.no_grad():
-        outputs = model(img_tensor)
+    # Create grid
+    grid_x = torch.arange(0, w, dtype=torch.float32, device=batch_heatmaps.device)
+    grid_y = torch.arange(0, h, dtype=torch.float32, device=batch_heatmaps.device)
+    yy, xx = torch.meshgrid(grid_y, grid_x, indexing='ij')
     
-    # Normalize outputs are 0-1 relative to the 224x224 canvas
-    keypoints = outputs.cpu().numpy()[0]
+    # Flatten
+    heatmaps_flat = batch_heatmaps.view(batch_size, num_joints, -1)
     
-    # --- STEP C: INVERSE LETTERBOXING (Post-processing) ---
-    for i in range(0, len(keypoints), 2):
-        # 1. Convert normalized (0-1) to canvas pixels (0-224)
-        x_canvas = keypoints[i] * IMG_SIZE
-        y_canvas = keypoints[i+1] * IMG_SIZE
+    # Apply Softmax to turn heatmaps into probability distributions
+    heatmaps_flat = nn.functional.softmax(heatmaps_flat * 10, dim=2) # Scale by 10 to sharpen peaks
+    
+    weights = heatmaps_flat.view(batch_size, num_joints, h, w)
+    
+    # Weighted sum
+    coords_x = (xx * weights).sum(dim=(2, 3))
+    coords_y = (yy * weights).sum(dim=(2, 3))
+    
+    preds = torch.stack([coords_x, coords_y], dim=2).cpu().numpy()
+    return preds
+
+# --- 4. The Pixel Refiner (The New Fix) ---
+class PixelRefiner:
+    def __init__(self):
+        # 22 Points Model (Meters)
+        W, L, S, HalfL = 6.1, 13.4, 1.98, 6.7
+        self.model_points = np.array([
+            [0, 0], [0.42, 0], [3.05, 0], [W - 0.42, 0], [W, 0],       
+            [0, 0.76], [W, 0.76],                                      
+            [0, HalfL - S], [3.05, HalfL - S], [W, HalfL - S],         
+            [0, HalfL], [W, HalfL],                                    
+            [0, HalfL + S], [3.05, HalfL + S], [W, HalfL + S],         
+            [0, L - 0.76], [W, L - 0.76],                              
+            [0, L], [0.42, L], [3.05, L], [W - 0.42, L], [W, L]        
+        ], dtype=np.float32)
+
+    def refine_with_pixels(self, image, points, window_size=40):
+        """
+        Looks at the high-res image around the predicted point
+        and centers it on the brightest white blob.
+        """
+        h, w = image.shape[:2]
+        corrected_points = []
         
-        # 2. Remove the padding (offsets) and reverse the scaling
-        real_x = int((x_canvas - offset_x) / scale)
-        real_y = int((y_canvas - offset_y) / scale)
+        # Convert to grayscale for thresholding
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
-        # Only draw if the point is within the actual frame boundaries
-        if 0 <= real_x < width_orig and 0 <= real_y < height_orig:
-            cv2.circle(frame, (real_x, real_y), 6, (0, 255, 0), -1)
-            cv2.putText(frame, str((i//2)+1), (real_x+5, real_y-5), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        for pt in points:
+            cx, cy = int(pt[0]), int(pt[1])
+            
+            # Define ROI (Region of Interest) bounds
+            x1 = max(0, cx - window_size // 2)
+            y1 = max(0, cy - window_size // 2)
+            x2 = min(w, cx + window_size // 2)
+            y2 = min(h, cy + window_size // 2)
+            
+            # Crop the patch
+            patch = gray[y1:y2, x1:x2]
+            
+            if patch.size == 0:
+                corrected_points.append(pt)
+                continue
 
-    out.write(frame)
-    
-    frame_count += 1
-    if frame_count % 50 == 0:
-        print(f"Processed {frame_count}/{total_frames} frames...")
+            # Find white lines (Simple thresholding)
+            # Badminton lines are white. We filter for bright pixels > 200
+            _, thresh = cv2.threshold(patch, 180, 255, cv2.THRESH_BINARY)
+            
+            # Find the center of mass (Centroid) of the white pixels
+            M = cv2.moments(thresh)
+            if M["m00"] != 0:
+                new_cx = int(M["m10"] / M["m00"])
+                new_cy = int(M["m01"] / M["m00"])
+                
+                # Adjust global coordinates
+                final_x = x1 + new_cx
+                final_y = y1 + new_cy
+                corrected_points.append([final_x, final_y])
+            else:
+                # If no white pixels found, keep original
+                corrected_points.append(pt)
+                
+        return np.array(corrected_points)
 
-cap.release()
-out.release()
-print(f"Done! Output saved to: {OUTPUT_VIDEO}")
+    def snap_to_grid(self, detected_points):
+        # Weighted RANSAC: Prioritize bottom points (indices 17-21)
+        src_pts = detected_points.reshape(-1, 1, 2).astype(np.float32)
+        dst_pts = self.model_points.reshape(-1, 1, 2)
+        
+        # Add extra weight to bottom corners (17, 21)
+        important_indices = [17, 21] * 10
+        src_weighted = np.concatenate([src_pts, src_pts[important_indices]])
+        dst_weighted = np.concatenate([dst_pts, dst_pts[important_indices]])
+
+        H, mask = cv2.findHomography(dst_weighted, src_weighted, 0) # 0 = Least Squares
+
+        if H is None: return detected_points
+        refined_pts = cv2.perspectiveTransform(dst_pts, H)
+        return refined_pts.reshape(-1, 2)
+
+# --- 5. Main Execution ---
+def main():
+    print("Loading...")
+    model = CourtHeatmapModel(num_keypoints=NUM_KEYPOINTS)
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+    model.to(DEVICE).eval()
+
+    transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    refiner = PixelRefiner()
+    cap = cv2.VideoCapture(INPUT_VIDEO)
+    width = int(cap.get(3)); height = int(cap.get(4))
+    out = cv2.VideoWriter(OUTPUT_VIDEO, cv2.VideoWriter_fourcc(*'mp4v'), cap.get(5), (width, height))
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret: break
+
+        # 1. AI Prediction
+        img_resized = cv2.resize(frame, (INPUT_SIZE, INPUT_SIZE))
+        img_tensor = transform(img_resized).unsqueeze(0).to(DEVICE)
+        
+        with torch.no_grad():
+            heatmaps = model(img_tensor) # Keep as tensor for soft-argmax
+
+        # 2. Soft Argmax (Better than just getting max pixel)
+        preds = get_soft_argmax(heatmaps)[0] 
+        
+        # Scale up
+        scale_x = width / HEATMAP_SIZE
+        scale_y = height / HEATMAP_SIZE
+        preds[:, 0] *= scale_x
+        preds[:, 1] *= scale_y
+
+        # 3. STEP A: Visual Refinement (Zoom into HD image and find white lines)
+        pixel_refined_pts = refiner.refine_with_pixels(frame, preds, window_size=50)
+
+        # 4. STEP B: Geometric Snap (Force them into a Badminton Shape)
+        final_pts = refiner.snap_to_grid(pixel_refined_pts)
+
+        # Draw
+        for pt in pixel_refined_pts: # Yellow: AI + Pixel Refine
+            cv2.circle(frame, (int(pt[0]), int(pt[1])), 4, (0, 255, 255), -1)
+
+        for i, pt in enumerate(final_pts): # Red: Final Geometric Grid
+            cv2.circle(frame, (int(pt[0]), int(pt[1])), 6, (0, 0, 255), -1)
+
+        out.write(frame)
+
+    cap.release(); out.release()
+    print("Done.")
+
+if __name__ == "__main__":
+    main()
