@@ -1,0 +1,15 @@
+{
+    "video_file": "/Users/nguyenanhvu/Documents/BadmintonAssistant/FirstTestData/InputVideo.mov",
+    "total_hits": 9,
+    "hits": [
+        0.52,
+        1.06,
+        1.47,
+        2.12,
+        2.55,
+        2.99,
+        3.39,
+        4.14,
+        4.73
+    ]
+}
