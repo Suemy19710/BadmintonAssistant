@@ -20,16 +20,23 @@ INPUT_SIZE = 224
 HEATMAP_SIZE = 56 
 
 def main():
-    # --- STEP 0: RUN AUDIO ANALYSIS FIRST ---
-    # We do this before opening the video loop because it's fast
-    if not os.path.exists(AUDIO_JSON_PATH):
-        audio_detector = AudioHitDetector(INPUT_VIDEO, AUDIO_JSON_PATH)
-        hit_timestamps = audio_detector.process()
-    else:
-        print("📄 Audio JSON exists. Loading...")
-        with open(AUDIO_JSON_PATH, 'r') as f:
-            data = json.load(f)
-            hit_timestamps = data['hits']
+    # --- STEP 0: FORCE FRESH AUDIO ANALYSIS ---
+    # A. Cleanup: If an old file exists, delete it.
+    if os.path.exists(AUDIO_JSON_PATH):
+        print(f"Deleting old audio data: {AUDIO_JSON_PATH}")
+        os.remove(AUDIO_JSON_PATH)
+
+    # B. Generate: Run the detector (this creates the new JSON file)
+    audio_detector = AudioHitDetector(INPUT_VIDEO, AUDIO_JSON_PATH)
+    audio_detector.process() 
+
+    # C. Load: Read the fresh data back
+    print("Loading fresh hit timestamps...")
+    with open(AUDIO_JSON_PATH, 'r') as f:
+        data = json.load(f)
+        hit_timestamps = data['hits']
+        
+    print(f"Loaded {len(hit_timestamps)} hits.")
 
     # 1. Initialize Models
     print("Loading AI models...")
