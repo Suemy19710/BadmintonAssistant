@@ -210,19 +210,19 @@ const App=() => {
     setTheme(prev => (prev === 'dark-green' ? 'white-indigo' : 'dark-green'));
   };
 
-  const goNextAfterVerification = async () => {
-  if (previewMode === "video") {
-    // treat demo video as the recorded session
-    setRecordedBlob(null);
-    setRecordedUrl(demoVideoSrc);
+  const startSessionAfterCameraSetup = async () => {
+    if (previewMode === "video") {
+      // treat demo video as the "recorded session"
+      setRecordedBlob(null);
+      setRecordedUrl(demoVideoSrc);
 
-    const duration = await getVideoDuration(demoVideoSrc);
-    setRecordedDuration(duration);
+      const duration = await getVideoDuration(demoVideoSrc);
+      setRecordedDuration(duration);
 
-    setStep(AppStep.TRIMMING); // skip recording
-  } else {
-    setStep(AppStep.RECORDING); // normal flow
-  }
+      setStep(AppStep.TRIMMING); // skip verification + recording
+    } else {
+      setStep(AppStep.VERIFICATION); // normal camera flow
+    }
 };
 
     // router
@@ -315,7 +315,8 @@ const App=() => {
             theme={theme}
             onToggleTheme={toggleTheme}
             onBack={() => setStep(AppStep.PLAYER_PROFILE)}
-            onNext={() => setStep(AppStep.VERIFICATION)}
+            onNext={startSessionAfterCameraSetup}
+            // onNext={() => setStep(AppStep.VERIFICATION)}
             previewMode={previewMode}
             setPreviewMode={setPreviewMode}
             demoVideoSrc={demoVideoSrc}
@@ -331,8 +332,8 @@ const App=() => {
           theme={theme}
           onToggleTheme={toggleTheme}
           onBack={() => setStep(AppStep.CAMERA_SETUP)}
-          // onNext={() => setStep(AppStep.RECORDING)}
-          onNext={goNextAfterVerification} 
+          onNext={() => setStep(AppStep.RECORDING)}
+          // onNext={goNextAfterVerification} 
           previewMode={previewMode}
           demoVideoSrc={demoVideoSrc}
         />

@@ -22,10 +22,30 @@ const FocusSelectionScreen = ({
       onBack={onBack}
     >
       <div className="space-y-6 flex-1">
+        {/* ✅ actions */}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedFocusAreas(FOCUS_AREAS)}
+            className={`px-3 py-2 rounded-lg text-xs ${currentTheme.card} ${currentTheme.text}`}
+          >
+            Select All
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedFocusAreas([])}
+            className={`px-3 py-2 rounded-lg text-xs ${currentTheme.card} ${currentTheme.text}`}
+          >
+            Clear
+          </button>
+        </div>
+
+        {/* ✅ multi-select list */}
         <div className="grid gap-3">
           {FOCUS_AREAS.map(area => (
             <button
               key={area}
+              type="button"
               onClick={() => {
                 setSelectedFocusAreas(prev =>
                   prev.includes(area) ? prev.filter(a => a !== area) : [...prev, area]
