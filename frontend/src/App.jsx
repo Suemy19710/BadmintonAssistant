@@ -22,7 +22,6 @@ import FocusSelectionScreen from './screens/FocusSelectionScreen';
 import AnalyzingScreen from './screens/AnalyzingScreen';
 import SummaryScreen from './screens/SummaryScreen';
 import ProfileScreen from './screens/ProfileScreen';
-
 const App=() => {
   // global overall state
   const [theme, setTheme] = useState('dark-green');
@@ -53,7 +52,12 @@ const App=() => {
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [recordedUrl, setRecordedUrl] = useState("");
   const [recordedDuration, setRecordedDuration] = useState(0);
+  const [previewMode, setPreviewMode] = useState("camera") // camera | video
 
+  const DEMO_VIDEO = '/InputVideo.mp4';
+  const [demoVideoSrc, setDemoVideoSrc] = useState(DEMO_VIDEO);
+
+  const previewRef = useRef(null) // used for verification + recording preview
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
   const recordingCameraRef = useRef(null); 
@@ -160,7 +164,7 @@ const App=() => {
       timerRef.current = null;
     }
 
-    recorderRef.current?.stop(); // ✅ triggers onstop -> goes to TRIMMING
+    recorderRef.current?.stop(); // triggers onstop -> goes to TRIMMING
   };
 
   const runAnalysis = async () => {
@@ -205,6 +209,21 @@ const App=() => {
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark-green' ? 'white-indigo' : 'dark-green'));
   };
+
+  const goNextAfterVerification = async () => {
+  if (previewMode === "video") {
+    // treat demo video as the recorded session
+    setRecordedBlob(null);
+    setRecordedUrl(demoVideoSrc);
+
+    const duration = await getVideoDuration(demoVideoSrc);
+    setRecordedDuration(duration);
+
+    setStep(AppStep.TRIMMING); // skip recording
+  } else {
+    setStep(AppStep.RECORDING); // normal flow
+  }
+};
 
     // router
   switch (step) {
@@ -290,16 +309,21 @@ const App=() => {
       );
 
     case AppStep.CAMERA_SETUP:
-      return (
-        <CameraSetupScreen
-          currentTheme={currentTheme}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          onBack={() => setStep(AppStep.PLAYER_PROFILE)}
-          onNext={() => setStep(AppStep.VERIFICATION)}
-        />
-      );
-    
+        return (
+          <CameraSetupScreen
+            currentTheme={currentTheme}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            onBack={() => setStep(AppStep.PLAYER_PROFILE)}
+            onNext={() => setStep(AppStep.VERIFICATION)}
+            previewMode={previewMode}
+            setPreviewMode={setPreviewMode}
+            demoVideoSrc={demoVideoSrc}
+            setDemoVideoSrc={setDemoVideoSrc}
+          />
+        );
+
+          
     case AppStep.VERIFICATION:
       return (
         <VerificationScreen
@@ -307,7 +331,10 @@ const App=() => {
           theme={theme}
           onToggleTheme={toggleTheme}
           onBack={() => setStep(AppStep.CAMERA_SETUP)}
-          onNext={() => setStep(AppStep.RECORDING)}
+          // onNext={() => setStep(AppStep.RECORDING)}
+          onNext={goNextAfterVerification} 
+          previewMode={previewMode}
+          demoVideoSrc={demoVideoSrc}
         />
       );
 
@@ -323,6 +350,11 @@ const App=() => {
           onStart={startRecording}
           onStop={stopRecording}
           cameraRef={recordingCameraRef}  
+          previewMode={previewMode}
+          demoVideoSrc={demoVideoSrc}
+          onTogglePreview={() =>
+            setPreviewMode((m) => (m === "camera" ? "video" : "camera"))
+  }
         />
       );
 

@@ -1,8 +1,20 @@
-import React from 'react';
-import StepContainer from '../components/StepContainer';
-import PrimaryButton from '../components/PrimaryButton';
+import React from "react";
+import StepContainer from "../components/StepContainer";
+import PrimaryButton from "../components/PrimaryButton";
 
-const CameraSetupScreen = ({ currentTheme, theme, onToggleTheme, onBack, onNext }) => {
+const CameraSetupScreen = ({
+  currentTheme,
+  theme,
+  onToggleTheme,
+  onBack,
+  onNext,
+  previewMode,
+  setPreviewMode,
+  demoVideoSrc,
+  onSetDemoVideo,
+  onSetPreviewMode,
+  setDemoVideoSrc,
+}) => {
   return (
     <StepContainer
       title="Camera Setup"
@@ -11,33 +23,55 @@ const CameraSetupScreen = ({ currentTheme, theme, onToggleTheme, onBack, onNext 
       onToggleTheme={onToggleTheme}
       onBack={onBack}
     >
-      <div className="space-y-8 flex-1">
+      <div className="space-y-6 flex-1 flex flex-col">
         <div className={`p-6 rounded-2xl ${currentTheme.card} border ${currentTheme.accent}`}>
-          <ul className="space-y-4">
-            <li className="flex gap-4">
-              <span className={`w-8 h-8 rounded-full ${currentTheme.bg} flex items-center justify-center font-bold flex-shrink-0`}>
-                1
-              </span>
-              <p className={currentTheme.subtext}>Place iPhone on a tripod at chest height.</p>
-            </li>
-            <li className="flex gap-4">
-              <span className={`w-8 h-8 rounded-full ${currentTheme.bg} flex items-center justify-center font-bold flex-shrink-0`}>
-                2
-              </span>
-              <p className={currentTheme.subtext}>Ensure full court boundaries are visible.</p>
-            </li>
-          </ul>
-        </div>
+          <p className={`text-sm font-bold ${currentTheme.text}`}>Choose input source</p>
 
-        <div className="aspect-[16/10] bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden relative">
-          <img
-            src="https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&q=80&w=800"
-            className="opacity-50 object-cover w-full h-full"
-            alt="Guidance"
-          />
-          <div className="absolute text-white text-center p-4">
-            <p className="text-sm font-bold uppercase tracking-widest">Ideal Setup View</p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setPreviewMode("camera")}
+              className={`p-4 rounded-2xl border text-sm font-bold ${
+                previewMode === "camera"
+                  ? "border-emerald-500/50 bg-emerald-500/10"
+                  : "border-white/10 bg-white/5"
+              } ${currentTheme.text}`}
+            >
+              Use Camera
+            </button>
+
+            <button
+              onClick={() => setPreviewMode("video")}
+              className={`p-4 rounded-2xl border text-sm font-bold ${
+                previewMode === "video"
+                  ? "border-emerald-500/50 bg-emerald-500/10"
+                  : "border-white/10 bg-white/5"
+              } ${currentTheme.text}`}
+            >
+              Use Demo Video
+            </button>
           </div>
+
+          {previewMode === "video" && (
+            <div className="mt-4 space-y-2">
+              <div className={`text-xs ${currentTheme.subtext}`}>
+                Current demo source: <span className="font-mono">{demoVideoSrc}</span>
+              </div>
+
+             <input
+                type="file"
+                accept="video/*"
+                className="hidden"
+                id="videoUpload"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const url = URL.createObjectURL(file);
+                  onSetDemoVideo(url);      // pass this from App
+                  onSetPreviewMode("video");// pass this from App
+                }}
+              />
+            </div>
+          )}
         </div>
 
         <div className="mt-auto">
